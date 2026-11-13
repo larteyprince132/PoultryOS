@@ -1,0 +1,6 @@
+{
+  "name": "PoultryOS",
+  "description": "Comprehensive offline-first poultry farm management system for flock tracking, daily egg collection, feed inventory, sales, expenses, and farm health.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
