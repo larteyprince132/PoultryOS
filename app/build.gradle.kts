@@ -50,6 +50,9 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      // Keep GitHub test builds installable beside the AI Studio app on a device.
+      applicationIdSuffix = ".github"
+      resValue("string", "app_name", "PoultryOS GitHub Test")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
       signingConfig = signingConfigs.getByName("debugConfig")
