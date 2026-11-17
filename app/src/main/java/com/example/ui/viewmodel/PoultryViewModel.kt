@@ -274,13 +274,9 @@ class PoultryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun recoverPassword(
-        emailOrPhone: String,
-        newPasswordPlain: String,
-        onResult: (Result<Unit>) -> Unit
-    ) {
+    fun recoverPassword(email: String, onResult: (Result<Unit>) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val result = sessionManager.recoverPassword(emailOrPhone, newPasswordPlain)
+            val result = sessionManager.recoverPassword(email)
             launch(Dispatchers.Main) { onResult(result) }
         }
     }

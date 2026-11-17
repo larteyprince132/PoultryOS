@@ -40,8 +40,6 @@ interface UserDao {
     @Query("UPDATE users SET activeFarmId = :farmId WHERE id = :userId")
     suspend fun updateActiveFarm(userId: String, farmId: String)
 
-    @Query("UPDATE users SET passwordHash = :newPasswordHash WHERE emailOrPhone = :emailOrPhone")
-    suspend fun resetPasswordByEmailOrPhone(emailOrPhone: String, newPasswordHash: String): Int
 }
 
 @Dao

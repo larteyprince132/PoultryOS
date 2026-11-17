@@ -88,7 +88,15 @@ fun OnboardingScreen(
     onFinished: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var mode by remember { mutableStateOf(AuthScreenMode.WELCOME) }
+    var mode by remember {
+        mutableStateOf(
+            if (viewModel.currentUser.value != null && viewModel.activeFarm.value == null) {
+                AuthScreenMode.ONBOARDING_WIZARD
+            } else {
+                AuthScreenMode.WELCOME
+            }
+        )
+    }
 
     when (mode) {
         AuthScreenMode.WELCOME -> {
@@ -272,7 +280,6 @@ fun SignInView(
     var isLoading by remember { mutableStateOf(false) }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var recoveryEmail by remember { mutableStateOf("") }
-    var newPasswordInput by remember { mutableStateOf("") }
     var recoverySuccessMsg by remember { mutableStateOf<String?>(null) }
     var recoveryErrorMsg by remember { mutableStateOf<String?>(null) }
     var isRecovering by remember { mutableStateOf(false) }
@@ -318,8 +325,8 @@ fun SignInView(
         OutlinedTextField(
             value = emailOrPhone,
             onValueChange = { emailOrPhone = it },
-            label = { Text("Email or Phone Number") },
-            placeholder = { Text("e.g. farmer@poultry.com or 0244123456") },
+            label = { Text("Email Address") },
+            placeholder = { Text("e.g. farmer@example.com") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().testTag("signin_email_input")
         )
@@ -360,7 +367,7 @@ fun SignInView(
         Button(
             onClick = {
                 if (emailOrPhone.isBlank() || password.isBlank()) {
-                    errorMessage = "Please enter both your email/phone and password."
+                    errorMessage = "Please enter your email and password."
                     return@Button
                 }
                 isLoading = true
@@ -414,7 +421,7 @@ fun SignInView(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "Enter your registered email or phone and set a new password.",
+                            "Enter your email address. If an account uses it, Firebase will send a password reset link.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -427,35 +434,27 @@ fun SignInView(
                         OutlinedTextField(
                             value = recoveryEmail,
                             onValueChange = { recoveryEmail = it },
-                            label = { Text("Registered Email / Phone") },
+                            label = { Text("Email Address") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().testTag("recovery_email_input")
-                        )
-                        OutlinedTextField(
-                            value = newPasswordInput,
-                            onValueChange = { newPasswordInput = it },
-                            label = { Text("New Password") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth().testTag("recovery_new_password_input")
                         )
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            if (recoveryEmail.isBlank() || newPasswordInput.isBlank()) {
-                                recoveryErrorMsg = "Please fill in all fields."
+                            if (recoveryEmail.isBlank()) {
+                                recoveryErrorMsg = "Please enter your email address."
                                 return@Button
                             }
                             isRecovering = true
                             recoveryErrorMsg = null
                             recoverySuccessMsg = null
-                            viewModel.recoverPassword(recoveryEmail, newPasswordInput) { result ->
+                            viewModel.recoverPassword(recoveryEmail) { result ->
                                 isRecovering = false
                                 result.fold(
                                     onSuccess = {
-                                        recoverySuccessMsg = "Password updated successfully! You can now sign in."
+                                        recoverySuccessMsg = "If an account uses this email, a reset link has been sent."
                                     },
                                     onFailure = {
                                         recoveryErrorMsg = it.message ?: "Password recovery failed."
@@ -469,7 +468,7 @@ fun SignInView(
                         if (isRecovering) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
                         } else {
-                            Text("Update Password")
+                            Text("Send Reset Link")
                         }
                     }
                 },
@@ -490,7 +489,9 @@ fun OnboardingWizardView(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var step by remember { mutableIntStateOf(1) } // 1..6
+    var step by remember {
+        mutableIntStateOf(if (viewModel.currentUser.value != null) 2 else 1)
+    } // 1..6
 
     // Step 1: Account
     var fullName by remember { mutableStateOf("") }
@@ -588,7 +589,7 @@ fun OnboardingWizardView(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Your credentials secure your farm's records both on this device and during cloud sync.",
+                        text = "Sign in to protect your account. Farm records stay available on this device and can sync when cloud sync is configured.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -604,8 +605,8 @@ fun OnboardingWizardView(
                     OutlinedTextField(
                         value = emailOrPhone,
                         onValueChange = { emailOrPhone = it },
-                        label = { Text("Email Address or Phone Number") },
-                        placeholder = { Text("e.g. kwame@farm.com or 0244123456") },
+                        label = { Text("Email Address") },
+                        placeholder = { Text("e.g. kwame@example.com") },
                         modifier = Modifier.fillMaxWidth().testTag("onboarding_email_input")
                     )
 
@@ -924,12 +925,12 @@ fun OnboardingWizardView(
                                 errorMessage = "Please enter your full name."
                                 return@Button
                             }
-                            if (emailOrPhone.isBlank()) {
-                                errorMessage = "Please enter your email or phone."
+                            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(emailOrPhone.trim()).matches()) {
+                                errorMessage = "Please enter a valid email address."
                                 return@Button
                             }
-                            if (password.length < 4) {
-                                errorMessage = "Please choose a password with at least 4 characters."
+                            if (password.length < 6) {
+                                errorMessage = "Please choose a password with at least 6 characters."
                                 return@Button
                             }
                             // Register the user

@@ -9,7 +9,8 @@ data class UserEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val fullName: String,
     val emailOrPhone: String,
-    val passwordHash: String,
+    // Retained for Room v2 compatibility with old local accounts. Firebase Auth owns new passwords.
+    val passwordHash: String = "",
     val activeFarmId: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
