@@ -11,17 +11,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 data class SyncUIState(
-    val globalStatus: SyncStatus = SyncStatus.SYNCED,
+    val globalStatus: SyncStatus = SyncStatus.ERROR,
     val pendingCount: Int = 0,
     val isOnline: Boolean = true,
     val isSyncing: Boolean = false,
-    val lastSyncTime: String = "Just now",
-    val lastSyncMessage: String = "All records saved and synchronized.",
+    val lastSyncTime: String = "Not synced yet",
+    val lastSyncMessage: String = "Cloud sync is not configured. Records remain saved on this device.",
     val isSimulatedOffline: Boolean = false
 )
 
@@ -77,11 +74,12 @@ class SyncManager(
                 unsyncedCustomers.size +
                 unsyncedHealth.size
 
-        val effectiveOnline = _syncState.value.isOnline
+        val hasConfirmedSync = _syncState.value.lastSyncTime != "Not synced yet"
         val newStatus = when {
-            totalPending == 0 -> SyncStatus.SYNCED
-            effectiveOnline -> SyncStatus.PENDING
-            else -> SyncStatus.PENDING
+            totalPending > 0 && _syncState.value.globalStatus == SyncStatus.ERROR -> SyncStatus.ERROR
+            totalPending > 0 -> SyncStatus.PENDING
+            hasConfirmedSync -> SyncStatus.SYNCED
+            else -> SyncStatus.ERROR
         }
 
         _syncState.update { current ->
@@ -147,52 +145,28 @@ class SyncManager(
                     feedLogs.size + inventories.size + customers.size + healthLogs.size
 
             if (batchSize == 0) {
+                val hasConfirmedSync = _syncState.value.lastSyncTime != "Not synced yet"
                 _syncState.update {
                     it.copy(
                         isSyncing = false,
-                        globalStatus = SyncStatus.SYNCED,
-                        lastSyncMessage = "All farm records up to date. No pending records."
+                        globalStatus = if (hasConfirmedSync) SyncStatus.SYNCED else SyncStatus.ERROR,
+                        lastSyncMessage = if (hasConfirmedSync) {
+                            "All farm records up to date. No pending records."
+                        } else {
+                            "Cloud sync is not configured. Records remain saved on this device."
+                        }
                     )
                 }
                 return
             }
 
-            // Simulate cloud persistence confirmation
-            delay(1000)
-
-            // Mark confirmed in local database
-            if (flocks.isNotEmpty()) database.flockDao().markFlocksSynced(flocks.map { it.id })
-            if (productions.isNotEmpty()) database.eggProductionDao().markProductionsSynced(productions.map { it.id })
-            if (sales.isNotEmpty()) database.saleDao().markSalesSynced(sales.map { it.id })
-            if (expenses.isNotEmpty()) database.expenseDao().markExpensesSynced(expenses.map { it.id })
-            if (feedLogs.isNotEmpty()) database.feedDao().markLogsSynced(feedLogs.map { it.id })
-            if (inventories.isNotEmpty()) database.feedDao().markInventoriesSynced(inventories.map { it.id })
-            if (customers.isNotEmpty()) database.customerDao().markCustomersSynced(customers.map { it.id })
-            if (healthLogs.isNotEmpty()) database.healthDao().markLogsSynced(healthLogs.map { it.id })
-
-            val timeFormatter = SimpleDateFormat("h:mm a, d MMM", Locale.getDefault())
-            val formattedTime = timeFormatter.format(Date())
-
-            database.syncAuditDao().insertAudit(
-                SyncAuditEntity(
-                    farmId = currentFarmId,
-                    userId = currentUserId,
-                    operation = "TENANT_CLOUD_SYNC",
-                    recordsSynced = batchSize,
-                    status = "SUCCESS",
-                    details = "Synced $batchSize records for user $currentUserId and farm $currentFarmId"
-                )
+            // This project does not yet have an authenticated cloud adapter. A network connection
+            // alone is not evidence that these records reached durable cloud storage, so leave
+            // every row pending until a backend confirms persistence.
+            throw IllegalStateException(
+                "Cloud sync is not configured. Records remain saved on this device."
             )
 
-            _syncState.update {
-                it.copy(
-                    isSyncing = false,
-                    globalStatus = SyncStatus.SYNCED,
-                    pendingCount = 0,
-                    lastSyncTime = formattedTime,
-                    lastSyncMessage = "Successfully synchronized $batchSize records to cloud storage."
-                )
-            }
         } catch (e: Exception) {
             database.syncAuditDao().insertAudit(
                 SyncAuditEntity(
@@ -208,7 +182,7 @@ class SyncManager(
                 it.copy(
                     isSyncing = false,
                     globalStatus = SyncStatus.ERROR,
-                    lastSyncMessage = "Sync failed: ${e.message}. Local records remain safe and will retry."
+                    lastSyncMessage = "Sync needs attention: ${e.message}. Local records remain safe and can be retried."
                 )
             }
         }
